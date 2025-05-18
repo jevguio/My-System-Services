@@ -1,0 +1,9 @@
+{
+  "title": "Test Plugin",
+  "name": "helloworld",
+  "enabled": true,
+  "version": "1.2.2",
+  "provider": "plugins\\helloworld\\PluginServiceProvider",
+  "description": "Testing Plugin Development.",
+  "gitUrl": "https://github.com/jevguio/plugin-test.git"
+}
