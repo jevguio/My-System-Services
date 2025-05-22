@@ -63,94 +63,129 @@
             </form>
 
             <div class="mt-4 space-y-2">
-                @foreach (\App\PluginHook::getPlugin() as $plugin)
+
+                @foreach ($items as $item)
                     <div class="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:border-gray-700">
-                        <h3 class="text-lg font-semibold dark:text-gray-300">{{ $plugin['title'] }} <span
-                                class="text-sm text-gray-400 dark:text-gray-400">v{{ $plugin['version'] }}</span></h3>
-                        <p class="text-gray-500">{{ $plugin['description'] }}</p>
+                        <h3 class="text-lg font-semibold dark:text-gray-300">{{ $item['title'] }} <span
+                                class="text-sm text-gray-400 dark:text-gray-400">v{{ $item['version'] }}</span></h3>
+                        <p class="text-gray-500">{{ $item['description'] }}</p>
 
                         <div class="mt-2">
-                            <a href="{{ $plugin['gitUrl'] }}" target="_blank"
+                            <a href="{{ $item['gitUrl'] }}" target="_blank"
                                 class="inline-block px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700">
                                 Info
                             </a>
-                            <div id="plugin-update-status" class="inline-block text-sm text-gray-900 dark:text-gray-200 px-4 py-2 rounded ">
-                                Checking for updates...
-                            </div>
-
-                            <script>
-                                const pluginGitUrl = @json($plugin['gitUrl']);
-                                const pathPlugin = @json($plugin['name']);
-
-                                fetch('/check-plugin-update', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                                        },
-                                        body: JSON.stringify({
-                                            url: pluginGitUrl,
-                                            path: `plugins/${pathPlugin}/plugin.json` // Correct full path here
-                                        })
-                                    })
-                                    .then(response => response.json())
-                                    .then(data => {
-
-                                        const el = document.getElementById('plugin-update-status');
-                                        if (data.update_available) {
-                                            // Show "Update" button or action
-                                            el.innerHTML =
-                                                `New version ${data.latest} available! <button onclick="updatePlugin({{ json_encode($plugin['gitUrl']) }}, {{ json_encode($plugin['name']) }})" class="bg-blue-600 text-white px-4 py-2 rounded">Update</button>`;
-                                        } else {
-
-                                            el.innerHTML = `You're up to date (v${data.current}).`;
-                                        }
-                                    })
-                                    .catch(error => console.error('Error checking plugin update:', error));
-                            </script>
+                            @php
+                                $plugins = collect(\App\PluginHook::getPlugin());
+                                $matchedPlugin = $plugins->firstWhere('gitUrl', $item['gitUrl']);
+                            @endphp
 
 
+                            @php
+                                $isSubscribed = auth()
+                                    ->user()
+                                    ->subscriptions()
+                                    ->where('stripe_price', '=', $item->stripe_price_id)
+                                    ->first();
+                            @endphp
 
-                            <form action="{{ route('plugin.delete') }}" method="POST" class="inline-block">
-                                @csrf
-                                <input type="hidden" name="plugin_name" value="{{ $plugin['name'] }}">
-                                <button type="submit"
-                                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700">Uninstall</button>
-                            </form>
+                            @if ($isSubscribed)
+                                @if ($matchedPlugin)
+                                    <div id="plugin-update-status"
+                                        class="inline-block text-sm text-gray-900 dark:text-gray-200 px-4 py-2 rounded ">
+                                        Checking for updates...
+                                    </div>
+
+                                    <script>
+                                        const pluginGitUrl = @json($item['gitUrl']);
+                                        const pathPlugin = @json($item['name']);
+
+                                        fetch('/check-plugin-update', {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                                },
+                                                body: JSON.stringify({
+                                                    url: pluginGitUrl,
+                                                    path: `plugins/${pathPlugin}/plugin.json` // Correct full path here
+                                                })
+                                            })
+                                            .then(response => response.json())
+                                            .then(data => {
+
+                                                const el = document.getElementById('plugin-update-status');
+                                                if (data.update_available) {
+                                                    // Show "Update" button or action
+                                                    el.innerHTML =
+                                                        `New version ${data.latest} available! <button onclick="updatePlugin({{ json_encode($item['gitUrl']) }}, {{ json_encode($item['name']) }})" class="bg-blue-600 text-white px-4 py-2 rounded">Update</button>`;
+                                                } else {
+
+                                                    el.innerHTML = `You're up to date (v${@json($item['version'])}).`;
+                                                }
+                                            })
+                                            .catch(error => console.error('Error checking plugin update:', error));
+                                    </script>
+
+                                    <form action="{{ route('plugin.delete') }}" method="POST" class="inline-block">
+                                        @csrf
+                                        <input type="hidden" name="plugin_name" value="{{ $item['name'] }}">
+                                        <button type="submit"
+                                            class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700">Uninstall</button>
+                                    </form>
+                                @else
+                                    <form action="{{ route('plugin.upload') }}" method="POST"
+                                        enctype="multipart/form-data" class="mt-6 space-y-4 inline-block">
+                                        @csrf
+                                        <input type="hidden" name="plugin_url" value="{{ $item['gitUrl'] }}">
+                                        <button type="submit"
+                                            class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded hover:bg-green-700">Install</button>
+                                    </form>
+                                @endif
+                            @else
+                                <form action="{{ route('subscribe', $item->id) }}" method="POST" class="inline-block">
+                                    @csrf
+                                    <input type="hidden" name="name" value="{{ $item->name }}">
+                                    <input type="hidden" name="price_id" value="{{ $item->stripe_price_id }}">
+                                    <button type="submit"
+                                        class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded hover:bg-green-700">Subscribe</button>
+                                </form>
+                            @endif
                         </div>
                     </div>
                 @endforeach
-                
-<script>
-    function updatePlugin(gitUrl, name) {
-        if (!confirm(`Update ${name}?`)) return;
 
-        fetch('/plugin-update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify({
-                url: gitUrl,
-                name: name
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.success);
-                location.reload();
-            } else {
-                alert(data.error || 'Update failed.');
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert('Something went wrong.');
-        });
-    }
-</script>   
+
+                <script>
+                    function updatePlugin(gitUrl, name) {
+                        if (!confirm(`Update ${name}?`)) return;
+
+                        fetch('/plugin-update', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                },
+                                body: JSON.stringify({
+                                    url: gitUrl,
+                                    name: name
+                                })
+                            })
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success) {
+                                    alert(data.success);
+                                    location.reload();
+                                } else {
+                                    alert(data.error || 'Update failed.');
+                                }
+                            })
+                            .catch(err => {
+                                console.error(err);
+                                alert('Something went wrong.');
+                            });
+                    }
+                </script>
             </div>
 
         </div>

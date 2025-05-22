@@ -20,7 +20,7 @@ class PluginHook
         ];
     }
 
-    public static function getPlugin(): array
+    public static function  getPlugin(): array
     {
         return self::$pluginList;
     }
